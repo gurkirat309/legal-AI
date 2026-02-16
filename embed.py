@@ -1,9 +1,9 @@
 import utils as Utils
 import os as OS
+import google.generativeai as genai
 from tqdm import tqdm
 import requests
 import fitz  # PyMuPDF
-from chromadb.utils import embedding_functions
 import chromadb
 
 def pdf_to_text(url):
@@ -43,12 +43,37 @@ def split_text_into_sections(text, min_chars_per_section):
     return sections
 
 def embed_text_in_chromadb(text, document_name, document_description, persist_directory=Utils.DB_FOLDER):
-    # Generate embedding for the text using OpenAI embeddings
-    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-        api_key=OS.getenv("OPENAI_API_KEY"), model_name="text-embedding-ada-002")    
+    # Try to read GEMINI_API_KEY using utils helper (env, .env, export-style)
+    api_key = Utils.load_gemini_key()
+    if not api_key:
+        raise EnvironmentError("Please set GEMINI_API_KEY environment variable or add it to a .env file")
+
+    genai.configure(api_key=api_key)
+
     documents = split_text_into_sections(text, 1000)
-    
-    ids = [str(hash(d)) for d in documents]  # Generate unique IDs for each document chunk
+
+    # generate embeddings with Google Generative Embeddings (use available model)
+    embeddings = []
+    for d in documents:
+        try:
+            res = genai.embed_content(model="models/text-embedding-004", content=d)
+            emb = None
+            if isinstance(res, dict):
+                emb = res.get("embedding") or (res.get("data", [{}])[0].get("embedding"))
+            else:
+                emb = getattr(res, "embedding", None)
+                if emb is None and getattr(res, "data", None):
+                    emb = getattr(res, "data")[0].get("embedding") if isinstance(getattr(res, "data")[0], dict) else getattr(res, "data")[0].embedding
+
+            if emb is None:
+                raise RuntimeError("Embedding not returned by API")
+
+            embeddings.append(emb)
+        except Exception as e:
+            print(f"Embedding error: {e}")
+            embeddings.append([])
+
+    ids = [str(i) for i in range(len(documents))]
 
     # Metadata for the documents
     metadata = {
@@ -59,7 +84,7 @@ def embed_text_in_chromadb(text, document_name, document_description, persist_di
     
     client = chromadb.PersistentClient(path=persist_directory)
     collection_name = 'collection_1'
-    collection = client.get_or_create_collection(name=collection_name,embedding_function=openai_ef)
+    collection = client.get_or_create_collection(name=collection_name)
 
     # create ids from the current count
     count = collection.count()
@@ -74,6 +99,7 @@ def embed_text_in_chromadb(text, document_name, document_description, persist_di
             ids=ids[i : i + 100],
             documents=documents[i : i + 100],
             metadatas=metadatas[i : i + 100],  # type: ignore
+            embeddings=embeddings[i : i + 100],
         )
 
     new_count = collection.count()

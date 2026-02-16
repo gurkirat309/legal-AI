@@ -3,6 +3,10 @@ import agent as Agent
 import utils as Utils
 import embed
 import os as OS
+from dotenv import load_dotenv
+
+# Load environment variables from .env (so Streamlit picks up GEMINI_API_KEY)
+load_dotenv()
 
 def create_chat(id: str):
     chat = ST.container()

@@ -25,6 +25,53 @@ def load_articles(file_name) -> list:
     
     return result 
 
+
+def load_gemini_key():
+    """Return GEMINI_API_KEY from environment or try to load it from a .env file (handles 'export ' prefix)."""
+    key = OS.getenv('GEMINI_API_KEY')
+    if key:
+        return key
+
+    # try python-dotenv
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        key = OS.getenv('GEMINI_API_KEY')
+        if key:
+            return key
+    except Exception:
+        pass
+
+    # try parsing .env for 'export ' style lines
+    if OS.path.exists('.env'):
+        try:
+            with open('.env', 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if line.startswith('export '):
+                        try:
+                            _, rest = line.split(' ', 1)
+                            k, sep, v = rest.partition('=')
+                            if k.strip() == 'GEMINI_API_KEY' and sep == '=':
+                                v = v.strip().strip('"').strip("'")
+                                OS.environ['GEMINI_API_KEY'] = v
+                                return v
+                        except Exception:
+                            continue
+                    else:
+                        # normal KEY=VALUE
+                        parts = line.split('=', 1)
+                        if len(parts) == 2 and parts[0].strip() == 'GEMINI_API_KEY':
+                            v = parts[1].strip().strip('"').strip("'")
+                            OS.environ['GEMINI_API_KEY'] = v
+                            return v
+        except Exception:
+            pass
+
+    return None
+
 # save articles data to file_name (.json)
 def save_articles(file_name, data):
     try:
