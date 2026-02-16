@@ -2,7 +2,7 @@
 A chatbot to help you navigate through the complicated paths of the AI regulations inside EU
 
 Technically it is a RAG system implementation, using:
-- LLM - ChatGPT 4.o
+- LLM - gemini-2.5-flash
 - VectorDB - ChromaDB
 - Embedding functions - Gemini (Google Generative AI)
 - Agents - LangChain 
